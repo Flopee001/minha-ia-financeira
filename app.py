@@ -14,14 +14,13 @@ st.set_page_config(page_title="Radar de IA Avançado", layout="wide")
 
 # =========================================================================
 # 🛡️ CONFIGURAÇÕES DE SEGURANÇA E NOTIFICAÇÕES
-# Substitua a palavra abaixo pela sua senha se quiser
 SENHA_CORRETA = "MariaVitoria"
 # =========================================================================
 
 def enviar_notificacao_telegram(token, chat_id, mensagem):
     if token and chat_id:
         url = f"https://telegram.org{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
+        payload = {"chat_id": chat_id, "text": mensagem, "parse_mode": "Markdown"}
         try:
             requests.post(url, json=payload, timeout=5)
         except:
@@ -52,17 +51,21 @@ if senha_digitada == SENHA_CORRETA:
     if ticker_pesquisado and ticker_pesquisado not in LISTA_ACOES:
         LISTA_ACOES.insert(0, ticker_pesquisado)
 
-    @st.cache_data(ttl=600)
+    @st.cache_data(ttl=300)
     def processar_ia_avancada(lista_ativos, cap, risco_max, tok, cid):
         resultados = []
+        
+        # Criação de uma sessão de navegação para evitar bloqueios de segurança (Anti-Bot headers)
+        session = requests.Session()
+        session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+
         for ticker in lista_ativos:
             try:
-                # CORREÇÃO CRUCIAL AQUI: Adicionado multi_level_index=False para impedir que os dados venham quebrados
-                dados = yf.download(ticker, start="2023-01-01", progress=False, multi_level_index=False)
-                if dados is None or dados.empty or len(dados) < 200: 
+                # Download forçando o index plano e vinculando a sessão de navegação limpa
+                dados = yf.download(ticker, start="2023-01-01", progress=False, multi_level_index=False, session=session)
+                if dados is None or dados.empty or len(dados) < 150: 
                     continue
                 
-                # Forçar renomeação correta de colunas caso venham em formatos alternativos
                 if isinstance(dados.columns, pd.MultiIndex):
                     dados.columns = dados.columns.get_level_values(0)
 
@@ -96,7 +99,7 @@ if senha_digitada == SENHA_CORRETA:
                 ultimos_dados = X.tail(1)
                 preco_atual = float(dados['Close'].iloc[-1])
                 probabilidades = modelo.predict_proba(ultimos_dados)
-                probabilidade_alta = float(probabilidades * 100)
+                probabilidade_alta = float(probabilidades[0][1] * 100)
                 
                 stop_loss = preco_atual * 0.97
                 preco_venda_alvo = preco_atual * 1.09
@@ -140,10 +143,15 @@ if senha_digitada == SENHA_CORRETA:
 
     df_painel = processar_ia_avancada(LISTA_ACOES, capital_total, risco_max_operacao, telegram_token, telegram_chat_id)
 
+    # Exibição direta dos elementos gráficos na interface
+    col1, col2, col3 = st.columns(3)
+    
     if df_painel is None or df_painel.empty:
-        st.warning("⚠️ Conexão restabelecida. Aguarde a sincronização e atualize a página em instantes.")
+        col1.metric("Ações Ativas Online", "0")
+        col2.metric("Oportunidades de Compra", "0")
+        col3.metric("Risco Máx por Ativo", f"R$ {risco_max_operacao:.2f}")
+        st.info("🔄 Sincronizando dados com a Bolsa de Valores. Aguarde um instante para a montagem das linhas...")
     else:
-        col1, col2, col3 = st.columns(3)
         oportunidades_hoje = len(df_painel[df_painel["Veredito"] == "🎯 COMPRAR"]) if "Veredito" in df_painel.columns else 0
         col1.metric("Ações Ativas Online", len(df_painel))
         col2.metric("Oportunidades de Compra", oportunidades_hoje)
@@ -152,13 +160,16 @@ if senha_digitada == SENHA_CORRETA:
         st.write("### 📋 Painel de Execução Tática Geral")
         st.dataframe(df_painel, use_container_width=True)
         
-        st.markdown("---")
-        st.write("### 📅 Matriz de Estratégia de Tempos Gráficos")
-        st.info("""
-        • **Planejamento Diário (Gatilho):** Disparado via momentum de 5 dias e variação rápida de volume. Estipula o Stop Loss estrito em 3%.
-        • **Planejamento Semanal (Filtro):** Alinhado com a Média Móvel de 20 períodos para garantir que a operação não vá contra a tendência da semana.
-        • **Planejamento Anual (Proteção):** Filtrado de forma absoluta pela Média Macro de 200 períodos. O sistema bloqueia compras automaticamente se a ação estiver barata mas em colapso de longo prazo.
-        """)
+        csv = df_painel.to_csv(index=False).encode('utf-8')
+        st.download_button(label="📥 Baixar Relatório em Planilha", data=csv, file_name="radar_ia.csv", mime="text/csv")
+        
+    st.markdown("---")
+    st.write("### 📅 Matriz de Estratégia de Tempos Gráficos")
+    st.info("""
+    • **Planejamento Diário (Gatilho):** Disparado via momentum de 5 dias e variação rápida de volume. Estipula o Stop Loss estrito em 3%.
+    • **Planejamento Semanal (Filtro):** Alinhado com a Média Móvel de 20 períodos para garantir que a operação não vá contra a tendência da semana.
+    • **Planejamento Anual (Proteção):** Filtrado de forma absoluta pela Média Macro de 200 períodos. O sistema bloqueia compras automaticamente se a ação estiver barata mas em colapso de longo prazo.
+    """)
 
 elif senha_digitada != "":
     st.sidebar.error("❌ Senha Incorreta!")
