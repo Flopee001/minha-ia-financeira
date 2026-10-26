@@ -13,7 +13,6 @@ st.set_page_config(page_title="Radar de IA: Mercado Financeiro", layout="wide")
 
 # =========================================================================
 # 🛡️ SISTEMA DE SEGURANÇA: DIGITE SUA SENHA EXCLUSIVA AQUI
-# Substitua a palavra 'minhasenha123' pela senha que você quiser
 SENHA_CORRETA = "MariaVitoria"
 # =========================================================================
 
@@ -33,8 +32,11 @@ if senha_digitada == SENHA_CORRETA:
         resultados = []
         for ticker in LISTA_ACOES:
             try:
+                # Mudança estratégica: Baixa os dados sem travar data final rígida
                 dados = yf.download(ticker, start="2023-01-01", progress=False)
-                if dados.empty: continue
+                if dados is None or dados.empty or len(dados) < 30: 
+                    continue
+                
                 dados.columns = dados.columns.get_level_values(0)
 
                 dados['Retorno'] = dados['Close'].pct_change()
@@ -45,6 +47,9 @@ if senha_digitada == SENHA_CORRETA:
 
                 dados['Alvo'] = np.where(dados['Close'].shift(-1) > dados['Close'], 1, 0)
                 dados = dados.dropna()
+
+                if len(dados) < 10:
+                    continue
 
                 recursos = ['Media_5', 'Media_20', 'Volatilidade_10', 'Retorno', 'Volume_Var']
                 X = dados[recursos]
@@ -64,7 +69,7 @@ if senha_digitada == SENHA_CORRETA:
                 preco_atual = float(dados['Close'].iloc[-1])
                 
                 probabilidades = modelo.predict_proba(ultimos_dados)
-                probabilidade_alta = float(probabilidades * 100)
+                probabilidade_alta = float(probabilidades[0][1] * 100)
                 
                 suporte_preco_barato = float(dados['Low'].tail(5).min())
 
@@ -87,28 +92,32 @@ if senha_digitada == SENHA_CORRETA:
                     "Proteção Stop Loss": f"R$ {stop_loss:.2f}" if stop_loss > 0 else "N/A",
                     "Ação Estratégica": acao_recomendada
                 })
-            except:
+            except Exception as e:
                 continue
                 
         return pd.DataFrame(resultados)
 
     df_painel = processar_ia_mercado()
 
-    col1, col2, col3 = st.columns(3)
-    oportunidades_hoje = len(df_painel[df_painel["Veredito do Sistema"] == "🎯 COMPRAR"])
-    col1.metric("Ações Monitoradas", len(LISTA_ACOES))
-    col2.metric("Oportunidades de Compra", oportunidades_hoje)
-    col3.metric("Filtro de Risco", "3% Máx Loss")
+    # 🛡️ TRAVA DE SEGURANÇA: Se a tabela estiver vazia por falta de conexão, o app não quebra
+    if df_painel.empty:
+        st.warning("⚠️ Conexão temporária com a API financeira falhou. Aguarde alguns segundos e atualize a página.")
+    else:
+        col1, col2, col3 = st.columns(3)
+        oportunidades_hoje = len(df_painel[df_painel["Veredito do Sistema"] == "🎯 COMPRAR"])
+        col1.metric("Ações Monitoradas", len(LISTA_ACOES))
+        col2.metric("Oportunidades de Compra", oportunidades_hoje)
+        col3.metric("Filtro de Risco", "3% Máx Loss")
 
-    st.write("### 📋 Painel de Tomada de Decisão Real")
-    st.dataframe(df_painel, use_container_width=True)
+        st.write("### 📋 Painel de Tomada de Decisão Real")
+        st.dataframe(df_painel, use_container_width=True)
 
-    csv = df_painel.to_csv(index=False).encode('utf-8')
-    st.download_button(label="📥 Baixar Relatório em Planilha", data=csv, file_name="radar_ia.csv", mime="text/csv")
+        csv = df_painel.to_csv(index=False).encode('utf-8')
+        st.download_button(label="📥 Baixar Relatório em Planilha", data=csv, file_name="radar_ia.csv", mime="text/csv")
 
-# Se o usuário não digitou nada ou errou a senha
+# Se o usuário errar a senha
 elif senha_digitada != "":
     st.sidebar.error("❌ Senha Incorreta! Acesso negado.")
     st.info("Por favor, insira a credencial correta na barra lateral para carregar a Inteligência Artificial.")
 else:
-    st.info("🔒 Sistema Bloqueado. Insira a senha na barra lateral esquerda para visualizar os dados de inteligência e o relatório de ações.")
+    st.info("🔒 Sistema Bloqueado. Insira a senha na barra lateral esquerda para visualizar os dados de inteligência.")
