@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import warnings
+import requests
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
@@ -11,9 +12,19 @@ warnings.filterwarnings("ignore")
 st.set_page_config(page_title="Radar de IA Avançado", layout="wide")
 
 # =========================================================================
-# 🛡️ CONFIGURAÇÃO DE SEGURANÇA: DIGITE SUA SENHA EXCLUSIVA AQUI
-SENHA_CORRETA = "MariaVitoria"
+# 🛡️ CONFIGURAÇÕES DE SEGURANÇA E NOTIFICAÇÕES
+# Substitua a palavra 'minhasenha123' pela sua senha definitiva se quiser
+SENHA_CORRETA = "minhasenha123"
 # =========================================================================
+
+def enviar_notificacao_telegram(token, chat_id, mensagem):
+    if token and chat_id:
+        url = f"https://telegram.org{token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": mensagem, "parse_mode": "Markdown"}
+        try:
+            requests.post(url, json=payload, timeout=5)
+        except:
+            pass
 
 # Interface de login visual na barra lateral
 st.sidebar.title("🔐 Área Restrita")
@@ -21,13 +32,18 @@ senha_digitada = st.sidebar.text_input("Digite a senha para acessar a IA:", type
 
 if senha_digitada == SENHA_CORRETA:
     st.title("🤖 IA Quantitativa & Gestão de Risco v3.0")
-    st.subheader("Análise Multi-Timeframe, Position Sizing Dinâmico e Alvos de Venda")
+    st.subheader("Análise Multi-Timeframe, Position Sizing Dinâmico e Alertas Mobile")
 
-    # Parâmetros de Gestão Financeira informados pelo Usuário na barra lateral
+    # NOVOS CAMPOS PARA NOTIFICAÇÃO DO TELEGRAM (Adicionados aqui na lateral)
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📢 Configurar Alertas no Celular")
+    telegram_token = st.sidebar.text_input("Token do Bot do Telegram (do BotFather):", type="password", value="")
+    telegram_chat_id = st.sidebar.text_input("Chat ID do Telegram (do UserInfoBot):", type="password", value="")
+
     st.sidebar.markdown("---")
     st.sidebar.subheader("💰 Gerenciamento de Capital")
-    capital_total = st.sidebar.number_input("Seu Capital Total Disponível (R$):", value=10000.0, step=1000.0)
-    risco_max_operacao = st.sidebar.number_input("Risco Máximo Aceito por Operação (R$):", value=200.0, step=50.0)
+    capital_total = st.sidebar.number_input("Seu Capital Total Disponível (R$):", value=1000.0, step=100.0)
+    risco_max_operacao = st.sidebar.number_input("Risco Máximo Aceito por Operação (R$):", value=100.0, step=10.0)
 
     st.write("### 🔍 Consultar uma Ação Específica")
     ticker_pesquisado = st.text_input("Digite o código da ação (ex: PETR4.SA, VALE3.SA, AAPL):", value="").strip().upper()
@@ -37,7 +53,7 @@ if senha_digitada == SENHA_CORRETA:
         LISTA_ACOES.insert(0, ticker_pesquisado)
 
     @st.cache_data(ttl=600)
-    def processar_ia_avancada(lista_ativos, cap, risco_max):
+    def processar_ia_avancada(lista_ativos, cap, risco_max, tok, cid):
         resultados = []
         for ticker in lista_ativos:
             try:
@@ -48,11 +64,11 @@ if senha_digitada == SENHA_CORRETA:
                 if isinstance(dados.columns, pd.MultiIndex):
                     dados.columns = dados.columns.get_level_values(0)
 
-                # INDICADORES TEMPORAIS (Diários, Semanais e Anuais)
+                # INDICADORES TEMPORAIS
                 dados['Retorno'] = dados['Close'].pct_change()
-                dados['Media_Fast'] = dados['Close'].rolling(window=5).mean() / dados['Close']  # Diário
-                dados['Media_Trend'] = dados['Close'].rolling(window=20).mean() / dados['Close'] # Semanal
-                dados['Media_Macro'] = dados['Close'].rolling(window=200).mean() / dados['Close'] # Anual
+                dados['Media_Fast'] = dados['Close'].rolling(window=5).mean() / dados['Close']
+                dados['Media_Trend'] = dados['Close'].rolling(window=20).mean() / dados['Close']
+                dados['Media_Macro'] = dados['Close'].rolling(window=200).mean() / dados['Close']
                 dados['Volatilidade'] = dados['Retorno'].rolling(window=10).std()
                 dados['Volume_Var'] = dados['Volume'].pct_change()
 
@@ -79,26 +95,26 @@ if senha_digitada == SENHA_CORRETA:
                 ultimos_dados = X.tail(1)
                 preco_atual = float(dados['Close'].iloc[-1])
                 probabilidades = modelo.predict_proba(ultimos_dados)
-                probabilidade_alta = float(probabilidades[0][1] * 100)
+                probabilidade_alta = float(probabilidades * 100)
                 
-                # Definição matemática de saídas baseada no preço de fechamento atual
-                stop_loss = preco_atual * 0.97  # Limite máximo de perda de 3% por ativo
-                preco_venda_alvo = preco_atual * 1.09  # Alvo de ganho calibrado em 3 para 1 (9% de alta)
+                stop_loss = preco_atual * 0.97
+                preco_venda_alvo = preco_atual * 1.09
 
-                # Cálculo do Tamanho do Lote Máximo Dinâmico (Position Sizing)
                 perda_por_acao = preco_atual - stop_loss
                 quantidade_lote = int(risco_max / perda_por_acao)
                 
-                # Trava de segurança: impede o lote de custar mais do que o seu capital total livre
                 if (quantidade_lote * preco_atual) > cap:
                     quantidade_lote = int(cap // preco_atual)
 
-                # Filtro Macro Temporal: Só libera compra se o preço estiver acima da tendência anual (Média 200)
                 macro_alta = float(dados['Close'].iloc[-1]) > float(dados['Close'].rolling(window=200).mean().iloc[-1])
                 
                 if probabilidade_alta >= 60.0 and acuracia > 50.0 and macro_alta:
                     veredicto = "🎯 COMPRAR"
                     estrategia = "Entrada Rápida Diária/Semanal (Tendência Macro Anual de Alta Confirmada)"
+                    
+                    # Disparar Alerta se configurado
+                    msg = f"🚨 *SINAL DE COMPRA IA* 🚨\nAtivo: {ticker}\nPreço: R$ {preco_atual:.2f}\nQtd Recomendada: {quantidade_lote} ações\nAlvo de Venda: R$ {preco_venda_alvo:.2f}\nStop Loss: R$ {stop_loss:.2f}"
+                    enviar_notificacao_telegram(tok, cid, msg)
                 else:
                     veredicto = "⏳ FIQUE DE FORA"
                     quantidade_lote = 0
@@ -122,7 +138,7 @@ if senha_digitada == SENHA_CORRETA:
                 
         return pd.DataFrame(resultados)
 
-    df_painel = processar_ia_avancada(LISTA_ACOES, capital_total, risco_max_operacao)
+    df_painel = processar_ia_avancada(LISTA_ACOES, capital_total, risco_max_operacao, telegram_token, telegram_chat_id)
 
     if df_painel.empty:
         st.warning("⚠️ Aguardando resposta da API financeira. Atualize a página em alguns instantes.")
@@ -136,13 +152,12 @@ if senha_digitada == SENHA_CORRETA:
         st.write("### 📋 Painel de Execução Tática Geral")
         st.dataframe(df_painel, use_container_width=True)
         
-        # Estrutura teórica das regras de tempo aplicadas
         st.markdown("---")
         st.write("### 📅 Matriz de Estratégia de Tempos Gráficos")
         st.info("""
         • **Planejamento Diário (Gatilho):** Disparado via momentum de 5 dias e variação rápida de volume. Estipula o Stop Loss estrito em 3%.
         • **Planejamento Semanal (Filtro):** Alinhado com a Média Móvel de 20 períodos para garantir que a operação não vá contra a tendência da semana.
-        • **Planejamento Anual (Proteção):** Filtrado de forma absoluta pela Média Macro de 200 períodos. O sistema bloqueia compras automaticamente se a ação estiver barata mas em colapso de longo prazo, mitigando quebras severas de capital.
+        • **Planejamento Anual (Proteção):** Filtrado de forma absoluta pela Média Macro de 200 períodos. O sistema bloqueia compras automaticamente se a ação estiver barata mas em colapso de longo prazo.
         """)
 
 elif senha_digitada != "":
