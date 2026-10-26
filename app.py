@@ -14,7 +14,7 @@ st.set_page_config(page_title="Radar de IA Avançado", layout="wide")
 # =========================================================================
 # 🛡️ CONFIGURAÇÕES DE SEGURANÇA E NOTIFICAÇÕES
 # Substitua a palavra 'minhasenha123' pela sua senha definitiva se quiser
-SENHA_CORRETA = "minhasenha123"
+SENHA_CORRETA = "MariaVitoria"
 # =========================================================================
 
 def enviar_notificacao_telegram(token, chat_id, mensagem):
