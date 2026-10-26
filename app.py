@@ -14,7 +14,7 @@ st.set_page_config(page_title="Radar de IA: Mercado Financeiro", layout="wide")
 # =========================================================================
 # 🛡️ SISTEMA DE SEGURANÇA: DIGITE SUA SENHA EXCLUSIVA AQUI
 # Substitua a palavra 'minhasenha123' pela senha que você quiser
-SENHA_CORRETA = "minhasenha123"
+SENHA_CORRETA = "MariaVitoria"
 # =========================================================================
 
 # Criar a interface de login visual na barra lateral
