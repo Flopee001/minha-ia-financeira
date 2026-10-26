@@ -9,18 +9,19 @@ from sklearn.metrics import accuracy_score
 
 warnings.filterwarnings("ignore")
 
+# Configuração da Página Web
 st.set_page_config(page_title="Radar de IA Avançado", layout="wide")
 
 # =========================================================================
 # 🛡️ CONFIGURAÇÕES DE SEGURANÇA E NOTIFICAÇÕES
-# Substitua a palavra 'minhasenha123' pela sua senha definitiva se quiser
+# Substitua a palavra abaixo pela sua senha se quiser
 SENHA_CORRETA = "MariaVitoria"
 # =========================================================================
 
 def enviar_notificacao_telegram(token, chat_id, mensagem):
     if token and chat_id:
         url = f"https://telegram.org{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": mensagem, "parse_mode": "Markdown"}
+        payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
         try:
             requests.post(url, json=payload, timeout=5)
         except:
@@ -34,7 +35,6 @@ if senha_digitada == SENHA_CORRETA:
     st.title("🤖 IA Quantitativa & Gestão de Risco v3.0")
     st.subheader("Análise Multi-Timeframe, Position Sizing Dinâmico e Alertas Mobile")
 
-    # NOVOS CAMPOS PARA NOTIFICAÇÃO DO TELEGRAM (Adicionados aqui na lateral)
     st.sidebar.markdown("---")
     st.sidebar.subheader("📢 Configurar Alertas no Celular")
     telegram_token = st.sidebar.text_input("Token do Bot do Telegram (do BotFather):", type="password", value="")
@@ -57,14 +57,15 @@ if senha_digitada == SENHA_CORRETA:
         resultados = []
         for ticker in lista_ativos:
             try:
-                dados = yf.download(ticker, start="2023-01-01", progress=False)
+                # CORREÇÃO CRUCIAL AQUI: Adicionado multi_level_index=False para impedir que os dados venham quebrados
+                dados = yf.download(ticker, start="2023-01-01", progress=False, multi_level_index=False)
                 if dados is None or dados.empty or len(dados) < 200: 
                     continue
                 
+                # Forçar renomeação correta de colunas caso venham em formatos alternativos
                 if isinstance(dados.columns, pd.MultiIndex):
                     dados.columns = dados.columns.get_level_values(0)
 
-                # INDICADORES TEMPORAIS
                 dados['Retorno'] = dados['Close'].pct_change()
                 dados['Media_Fast'] = dados['Close'].rolling(window=5).mean() / dados['Close']
                 dados['Media_Trend'] = dados['Close'].rolling(window=20).mean() / dados['Close']
@@ -112,7 +113,6 @@ if senha_digitada == SENHA_CORRETA:
                     veredicto = "🎯 COMPRAR"
                     estrategia = "Entrada Rápida Diária/Semanal (Tendência Macro Anual de Alta Confirmada)"
                     
-                    # Disparar Alerta se configurado
                     msg = f"🚨 *SINAL DE COMPRA IA* 🚨\nAtivo: {ticker}\nPreço: R$ {preco_atual:.2f}\nQtd Recomendada: {quantidade_lote} ações\nAlvo de Venda: R$ {preco_venda_alvo:.2f}\nStop Loss: R$ {stop_loss:.2f}"
                     enviar_notificacao_telegram(tok, cid, msg)
                 else:
@@ -140,8 +140,8 @@ if senha_digitada == SENHA_CORRETA:
 
     df_painel = processar_ia_avancada(LISTA_ACOES, capital_total, risco_max_operacao, telegram_token, telegram_chat_id)
 
-    if df_painel.empty:
-        st.warning("⚠️ Aguardando resposta da API financeira. Atualize a página em alguns instantes.")
+    if df_painel is None or df_painel.empty:
+        st.warning("⚠️ Conexão restabelecida. Aguarde a sincronização e atualize a página em instantes.")
     else:
         col1, col2, col3 = st.columns(3)
         oportunidades_hoje = len(df_painel[df_painel["Veredito"] == "🎯 COMPRAR"]) if "Veredito" in df_painel.columns else 0
