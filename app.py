@@ -4,39 +4,143 @@ import pandas as pd
 import numpy as np
 import warnings
 import requests
+import sqlite3
+import hashlib
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
 warnings.filterwarnings("ignore")
 
-# Configuração da Página Web do Aplicativo
+# Configuração Inicial da Página do App
 st.set_page_config(page_title="App Radar IA: Finanças", layout="wide", page_icon="📈")
 
 # =========================================================================
-# 🛡️ CONFIGURAÇÃO DE SEGURANÇA (Sua senha de acesso ao App)
-SENHA_CORRETA = "MariaVitoria"
+# 🗄️ GERENCIAMENTO DO BANCO DE DADOS (SQLite)
 # =========================================================================
+def conectar_banco():
+    conn = sqlite3.connect("usuarios_ia.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            usuario TEXT PRIMARY KEY,
+            senha TEXT
+        )
+    """)
+    conn.commit()
+    return conn, cursor
 
-def enviar_notificacao_telegram(token, chat_id, mensagem):
-    if token and chat_id:
-        url = f"https://telegram.org{token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": mensagem, "parse_mode": "Markdown"}
-        try: requests.post(url, json=payload, timeout=5)
-        except: pass
+def criptografar_senha(senha):
+    return hashlib.sha256(senha.encode()).hexdigest()
 
-# Interface de login na barra lateral
-st.sidebar.markdown("# 🔐 Acesso ao App")
-senha_digitada = st.sidebar.text_input("Digite sua senha de acesso:", type="password")
+def cadastrar_usuario(usuario, senha):
+    conn, cursor = conectar_banco()
+    try:
+        cursor.execute("INSERT INTO usuarios (usuario, senha) VALUES (?, ?)", (usuario, criptografar_senha(senha)))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
 
-if senha_digitada == SENHA_CORRETA:
-    st.title("📈 Aplicativo Inteligente de Análise Quantitativa v4.0")
-    st.subheader("Filtro Automático de Ativos: Classificação por Risco, Assertividade e Preço")
+def verificar_login(usuario, senha):
+    conn, cursor = conectar_banco()
+    cursor.execute("SELECT * FROM usuarios WHERE usuario = ? AND senha = ?", (usuario, criptografar_senha(senha)))
+    resultado = cursor.fetchone()
+    conn.close()
+    return resultado is not None
+
+def atualizar_senha(usuario, nova_senha):
+    conn, cursor = conectar_banco()
+    cursor.execute("UPDATE usuarios SET senha = ? WHERE usuario = ?", (criptografar_senha(nova_senha), usuario))
+    conn.commit()
+    linhas_afetadas = cursor.rowcount
+    conn.close()
+    return linhas_afetadas > 0
+
+# Inicializa a tabela do banco de dados na inicialização
+conectar_banco()
+
+# =========================================================================
+# 🔑 INTERFACE DE ACESSO (Login, Cadastro e Redefinição)
+# =========================================================================
+st.sidebar.markdown("# 🔐 Painel de Acesso")
+aba_autenticacao = st.sidebar.radio("Escolha uma opção:", ["Entrar no Sistema", "Criar Nova Conta", "Redefinir Minha Senha"])
+
+login_confirmado = False
+usuario_ativo = ""
+
+if aba_autenticacao == "Entrar no Sistema":
+    st.sidebar.subheader("Login")
+    user_input = st.sidebar.text_input("Nome de Usuário:")
+    pass_input = st.sidebar.text_input("Senha de Acesso:", type="password")
+    
+    if st.sidebar.button("Entrar"):
+        if verificar_login(user_input, pass_input):
+            st.session_state["login_confirmado"] = True
+            st.session_state["usuario_ativo"] = user_input
+            st.sidebar.success(f"🔓 Acesso liberado! Bem-vindo, {user_input}.")
+        else:
+            st.sidebar.error("❌ Usuário ou senha incorretos.")
+
+elif aba_autenticacao == "Criar Nova Conta":
+    st.sidebar.subheader("Cadastro de Novo Usuário")
+    novo_user = st.sidebar.text_input("Escolha um Nome de Usuário:")
+    novo_pass = st.sidebar.text_input("Escolha uma Senha Segura:", type="password")
+    confirmar_pass = st.sidebar.text_input("Confirme a Senha:", type="password")
+    
+    if st.sidebar.button("Salvar Cadastro"):
+        if not novo_user or not novo_pass:
+            st.sidebar.warning("⚠️ Preencha todos os campos obrigatórios.")
+        elif novo_pass != confirmar_pass:
+            st.sidebar.error("❌ As senhas digitadas não são iguais.")
+        else:
+            sucesso = cadastrar_usuario(novo_user, novo_pass)
+            if sucesso:
+                st.sidebar.success("🎉 Conta criada com sucesso! Mude para a aba 'Entrar no Sistema' para fazer login.")
+            else:
+                st.sidebar.error("❌ Este nome de usuário já está sendo usado.")
+
+elif aba_autenticacao == "Redefinir Minha Senha":
+    st.sidebar.subheader("Alterar Senha Existente")
+    user_redefinir = st.sidebar.text_input("Confirme seu Nome de Usuário:")
+    senha_atual_verificar = st.sidebar.text_input("Digite sua Senha Atual:", type="password")
+    nova_senha_input = st.sidebar.text_input("Digite a NOVA Senha:", type="password")
+    
+    if st.sidebar.button("Atualizar Senha"):
+        if verificar_login(user_redefinir, senha_atual_verificar):
+            if atualizar_senha(user_redefinir, nova_senha_input):
+                st.sidebar.success("✅ Senha redefinida com sucesso! Faça login com a nova credencial.")
+            else:
+                st.sidebar.error("❌ Erro interno ao atualizar. Tente novamente.")
+        else:
+            st.sidebar.error("❌ Usuário ou senha atual incorretos. Não foi possível validar a alteração.")
+
+# Mantém o estado do login ativo enquanto navega no app
+if "login_confirmado" in st.session_state and st.session_state["login_confirmado"]:
+    login_confirmado = True
+    usuario_ativo = st.session_state["usuario_ativo"]
+
+# =========================================================================
+# 🤖 INTEGRAÇÃO DO CORE DA IA (Carrega apenas após login válido)
+# =========================================================================
+if login_confirmado:
+    st.title("📈 Aplicativo Inteligente de Análise Quantitativa v4.5")
+    st.subheader(f"Painel Operacional Ativo — Analisando como: {usuario_ativo}")
 
     # Configurações financeiras na lateral
     st.sidebar.markdown("---")
     st.sidebar.subheader("💰 Gestão de Capital")
     capital_total = st.sidebar.number_input("Capital Total para Operar (R$):", value=1000.0, step=100.0)
     risco_max_operacao = st.sidebar.number_input("Risco Máximo por Operação (R$):", value=100.0, step=10.0)
+
+    # Função auxiliar para disparar as notificações
+    def enviar_notificacao_telegram(token, chat_id, mensagem):
+        if token and chat_id:
+            url = f"https://telegram.org{token}/sendMessage"
+            payload = {"chat_id": chat_id, "text": mensagem, "parse_mode": "Markdown"}
+            try: requests.post(url, json=payload, timeout=5)
+            except: pass
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("📢 Notificações Mobile")
@@ -46,12 +150,11 @@ if senha_digitada == SENHA_CORRETA:
     st.write("### 🔍 Pesquisar outro Ativo na Bolsa")
     ticker_pesquisado = st.text_input("Digite o código de qualquer ação (Ex: SANB4.SA, CPLE6.SA, AAPL):", value="").strip().upper()
 
-    # 1. EXPANSÃO DA LISTA: Monitorando 20 ações principais da bolsa simultaneamente
     LISTA_ACOES = [
         "PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBAS3.SA", "BBDC4.SA", 
         "MGLU3.SA", "ABEV3.SA", "WEGE3.SA", "ELET3.SA", "RENT3.SA",
         "LREN3.SA", "GGBR4.SA", "ITSA4.SA", "B3SA3.SA", "SUZB3.SA",
-        "RAIZ4.SA", "CMIG4.SA", "VVAR3.SA", "JBSS3.SA", "AZUL4.SA"
+        "RAIZ4.SA", "CMIG4.SA", "JBSS3.SA", "AZUL4.SA"
     ]
     
     if ticker_pesquisado and ticker_pesquisado not in LISTA_ACOES:
@@ -97,7 +200,7 @@ if senha_digitada == SENHA_CORRETA:
 
                 ultimos_dados = X.tail(1)
                 preco_atual = float(dados['Close'].iloc[-1])
-                probabilidade_alta = float(modelo.predict_proba(ultimos_dados)[0][1] * 100)
+                probabilidade_alta = float(modelo.predict_proba(ultimos_dados) * 100)
                 
                 stop_loss = preco_atual * 0.97
                 preco_venda_alvo = preco_atual * 1.09
@@ -109,66 +212,8 @@ if senha_digitada == SENHA_CORRETA:
 
                 macro_alta = float(dados['Close'].iloc[-1]) > float(dados['Close'].rolling(window=200).mean().iloc[-1])
                 
-                # Classificação de status
                 if probabilidade_alta >= 60.0 and acuracia > 50.0 and macro_alta:
                     veredicto = "🎯 COMPRAR"
-                    ordem_prioridade = 1  # Melhores opções no topo
+                    ordem_prioridade = 1
                     status_operacional = "Excelente (Boa para Compra)"
                     
-                    msg = f"🚨 *APP SINAL IA* 🚨\nAtivo: {ticker}\nPreço: R$ {preco_atual:.2f}\nQtd: {quantidade_lote}\nAlvo: R$ {preco_venda_alvo:.2f}"
-                    enviar_notificacao_telegram(tok, cid, msg)
-                else:
-                    veredicto = "⏳ FIQUE DE FORA"
-                    ordem_prioridade = 2  # Piores opções embaixo
-                    quantidade_lote = 0
-                    stop_loss = 0.0
-                    preco_venda_alvo = 0.0
-                    status_operacional = "Aguardar (Não recomendada)"
-
-                resultados.append({
-                    "Prioridade": ordem_prioridade,
-                    "Ação": ticker,
-                    "Preço Atual (R$)": round(preco_atual, 2),
-                    "Veredito IA": veredicto,
-                    "Status": status_operacional,
-                    "Certeza de Alta": round(probabilidade_alta, 1),
-                    "Taxa de Acerto (IA)": f"{acuracia:.1f}%",
-                    "Qtd Recomendada": quantidade_lote,
-                    "Alvo de Venda": round(preco_venda_alvo, 2) if preco_venda_alvo > 0 else 0.0,
-                    "Stop Loss": round(stop_loss, 2) if stop_loss > 0 else 0.0
-                })
-            except: continue
-                
-        df = pd.DataFrame(resultados)
-        
-        # 2. SISTEMA DE RANKING: Organiza por melhores decisões (Comprar antes), depois por maior Certeza de Alta e depois por Preço mais barato
-        if not df.empty:
-            df = df.sort_values(by=["Prioridade", "Certeza de Alta", "Preço Atual (R$)"], ascending=[True, False, True])
-            df = df.drop(columns=["Prioridade"]) # Remove coluna de apoio técnico do ranking
-        return df
-
-    df_painel = processar_aplicativo_ia(LISTA_ACOES, capital_total, risco_max_operacao, telegram_token, telegram_chat_id)
-
-    col1, col2, col3 = st.columns(3)
-    if df_painel is None or df_painel.empty:
-        col1.metric("Ações Analisadas", "0")
-        col2.metric("Recomendações Ativas", "0")
-        st.info("🔄 Sincronizando o aplicativo com a Bolsa de Valores. Aguarde um instante...")
-    else:
-        ativos_com_sinal = len(df_painel[df_painel["Veredito IA"] == "🎯 COMPRAR"])
-        col1.metric("Ações Ativas Monitoradas", len(df_painel))
-        col2.metric("Boas para Compra Hoje", ativos_com_sinal)
-        col3.metric("Gerenciador de Risco", "Ativo (3% Max Loss)")
-
-        st.write("### 📊 Classificação Geral do Aplicativo (Das Melhores para as Piores / Mais Baratas)")
-        
-        # Exibe a tabela organizada de forma nativa e limpa
-        st.dataframe(df_painel, use_container_width=True)
-        
-        csv = df_painel.to_csv(index=False).encode('utf-8')
-        st.download_button(label="📥 Exportar Relatório do App para Planilha", data=csv, file_name="app_radar_ia.csv", mime="text/csv")
-
-elif senha_digitada != "":
-    st.sidebar.error("❌ Senha Incorreta!")
-else:
-    st.info("👋 Bem-vindo ao seu App de IA. Insira a chave de acesso na barra lateral esquerda para destravar o painel de investimentos.")
