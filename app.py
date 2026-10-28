@@ -11,6 +11,7 @@ from sklearn.metrics import accuracy_score
 
 warnings.filterwarnings("ignore")
 
+# Configuração Inicial da Página do App
 st.set_page_config(page_title="App Radar IA: Finanças", layout="wide", page_icon="📈")
 
 def conectar_banco():
@@ -111,18 +112,31 @@ if login_confirmado:
     telegram_token = st.sidebar.text_input("Token Telegram:", type="password")
     telegram_chat_id = st.sidebar.text_input("Chat ID:", type="password")
 
+    st.write("### 🔍 Pesquisar uma Ação Extra")
+    ticker_pesquisado = st.text_input("Digite o código de uma nova empresa (Ex: SANB4.SA, CPLE6.SA) para embutir na lista fixa:", value="").strip().upper()
+
+    # 1. LISTA FIXA GARANTIDA: Sempre rodará estes papéis principais
     LISTA_ACOES = ["PETR4.SA", "VALE3.SA", "ITUB4.SA", "BBAS3.SA", "BBDC4.SA", "MGLU3.SA", "ABEV3.SA", "WEGE3.SA", "ELET3.SA", "RENT3.SA"]
+    
+    # Se você pesquisar algo, o app insere esse ativo temporariamente junto com as fixas
+    if ticker_pesquisado and ticker_pesquisado not in LISTA_ACOES:
+        LISTA_ACOES.insert(0, ticker_pesquisado)
 
     @st.cache_data(ttl=300)
     def processar_ia(lista_ativos, cap, risco_max):
         resultados = []
         session = requests.Session()
-        session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+        
         for ticker in lista_ativos:
             try:
+                # Sincronização direta e estável usando os cabeçalhos corretos para impedir bloqueios da API
                 dados = yf.download(ticker, start="2023-01-01", progress=False, multi_level_index=False, session=session)
-                if dados is None or dados.empty or len(dados) < 100: continue
-                if isinstance(dados.columns, pd.MultiIndex): dados.columns = dados.columns.get_level_values(0)
+                if dados is None or dados.empty or len(dados) < 100: 
+                    continue
+                
+                if isinstance(dados.columns, pd.MultiIndex): 
+                    dados.columns = dados.columns.get_level_values(0)
 
                 dados['Retorno'] = dados['Close'].pct_change()
                 dados['Media_Fast'] = dados['Close'].rolling(window=5).mean() / dados['Close']
@@ -151,7 +165,8 @@ if login_confirmado:
                     stop_loss, preco_alvo = preco_atual * 0.97, preco_atual * 1.09
                     dif = preco_atual - stop_loss
                     qtd = int(risco_max / dif) if dif > 0 else 0
-                    if (qtd * preco_atual) > cap: qtd = int(cap // preco_atual)
+                    if (qtd * preco_atual) > cap: 
+                        qtd = int(cap // preco_atual)
                 else:
                     veredicto, prioridade, status = "⏳ FIQUE DE FORA", 2, "Aguardar"
                     qtd, stop_loss, preco_alvo = 0, 0.0, 0.0
@@ -170,9 +185,16 @@ if login_confirmado:
             df = df.sort_values(by=["Prioridade", "Certeza de Alta"], ascending=[True, False]).drop(columns=["Prioridade"])
         return df
 
+    # GATILHO COMPLETO: Roda o processamento diretamente para todas as ações automaticamente
     df_painel = processar_ia(LISTA_ACOES, capital_total, risco_max_operacao)
 
     if not df_painel.empty:
+        col1, col2, col3 = st.columns(3)
+        ativos_com_sinal = len(df_painel[df_painel["Veredito IA"] == "🎯 COMPRAR"])
+        col1.metric("Ações Ativas Monitoradas", len(df_painel))
+        col2.metric("Boas para Compra Hoje", ativos_com_sinal)
+        col3.metric("Gerenciador de Risco", "Ativo (3% Max Loss)")
+
         st.write("### 📊 Ranking das Melhores Ações para Operar")
         st.dataframe(df_painel, use_container_width=True)
         
@@ -183,6 +205,9 @@ if login_confirmado:
                     msg = f"🚨 *COMPRA IA* 🚨\nAtivo: {row['Ação']}\nPreço: R$ {row['Preço Atual (R$)']}\nQtd: {row['Qtd Recomendada']}"
                     try: requests.post(url, json={"chat_id": telegram_chat_id, "text": msg, "parse_mode": "Markdown"})
                     except: pass
+    else:
+        st.info("🔄 Sincronizando o aplicativo de IA com a Bolsa de Valores. Aguarde um instante para a montagem automática das linhas...")
 
 else:
-    st.info("🔒 Sistema Bloqueado. Crie uma conta ou faça login na barra lateral para ver o ranking da IA.")
+    st.title("📈 Aplicativo Inteligente de Análise Quantitativa v4.5")
+    st.info("🔒 Sistema Bloqueado. Crie uma conta ou faça login na barra lateral para ver o ranking automático da IA.")
