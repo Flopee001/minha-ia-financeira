@@ -202,10 +202,10 @@ if login_confirmado:
                 preco_atual = float(dados['Close'].iloc[-1])
                 probabilidade_alta = float(modelo.predict_proba(ultimos_dados) * 100)
                 
-                stop_loss = preco_atual * 0.97
+                stop_loss_val = preco_atual * 0.97
                 preco_venda_alvo = preco_atual * 1.09
 
-                perda_por_acao = preco_atual - stop_loss
+                perda_por_acao = preco_atual - stop_loss_val
                 quantidade_lote = int(risco_max / perda_por_acao) if perda_por_acao > 0 else 0
                 if (quantidade_lote * preco_atual) > cap:
                     quantidade_lote = int(cap // preco_atual)
@@ -220,4 +220,3 @@ if login_confirmado:
                     veredicto = "⏳ FIQUE DE FORA"
                     ordem_prioridade = 2
                     quantidade_lote = 0
-                    stop_loss = 0.0
