@@ -128,13 +128,11 @@ if login_confirmado:
     st.title("📈 Aplicativo Inteligente de Análise Quantitativa v4.5")
     st.subheader(f"Painel Operacional Ativo — Analisando como: {usuario_ativo}")
 
-    # Configurações financeiras na lateral
     st.sidebar.markdown("---")
     st.sidebar.subheader("💰 Gestão de Capital")
     capital_total = st.sidebar.number_input("Capital Total para Operar (R$):", value=1000.0, step=100.0)
     risco_max_operacao = st.sidebar.number_input("Risco Máximo por Operação (R$):", value=100.0, step=10.0)
 
-    # Função auxiliar para disparar as notificações
     def enviar_notificacao_telegram(token, chat_id, mensagem):
         if token and chat_id:
             url = f"https://telegram.org{token}/sendMessage"
@@ -217,3 +215,5 @@ if login_confirmado:
                     ordem_prioridade = 1
                     status_operacional = "Excelente (Boa para Compra)"
                     
+                    msg = f"🚨 *APP SINAL IA* 🚨\nAtivo: {ticker}\nPreço: R$ {preco_atual:.2f}\nQtd: {quantidade_lote}\nAlvo: R$ {preco_venda_alvo:.2f}"
+                    enviar_notificacao_telegram(tok, cid, msg)
