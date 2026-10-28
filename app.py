@@ -132,7 +132,7 @@ if login_confirmado:
     st.sidebar.markdown("---")
     st.sidebar.subheader("💰 Gestão de Capital")
     capital_total = st.sidebar.number_input("Capital Total para Operar (R$):", value=1000.0, step=100.0)
-    risco_max_operacao = st.sidebar.number_input("Risco Máximo por Operação (R$):", value=100.0, step=10.0)
+    risco_max_operacao = st.sidebar.number_input("Risco Máximo por Operação (R$):", value=1000.0, step=10.0)
 
     def enviar_notificacao_telegram(token, chat_id, mensagem):
         if token and chat_id:
@@ -200,7 +200,7 @@ if login_confirmado:
 
                 ultimos_dados = X.tail(1)
                 preco_atual = float(dados['Close'].iloc[-1])
-                probabilidade_alta = float(modelo.predict_proba(ultimos_dados) * 100)
+                probabilidade_alta = float(modelo.predict_proba(ultimos_dados)[0][1] * 100)
                 
                 stop_loss_val = preco_atual * 0.97
                 preco_venda_alvo = preco_atual * 1.09
