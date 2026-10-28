@@ -219,4 +219,4 @@ if login_confirmado:
                 else:
                     veredicto = "⏳ FIQUE DE FORA"
                     ordem_prioridade = 2
-                    quantidade_lote = 20
+                    quantidade_lote = 0
