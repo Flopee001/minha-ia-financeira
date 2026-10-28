@@ -159,7 +159,7 @@ if login_confirmado:
         LISTA_ACOES.insert(0, ticker_pesquisado)
 
     @st.cache_data(ttl=300)
-    def processar_aplicativo_ia(lista_ativos, cap, risco_max, tok, cid):
+    def processar_aplicativo_ia(lista_ativos, cap, risco_max):
         resultados = []
         session = requests.Session()
         session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
@@ -214,6 +214,9 @@ if login_confirmado:
                     veredicto = "🎯 COMPRAR"
                     ordem_prioridade = 1
                     status_operacional = "Excelente (Boa para Compra)"
-                    
-                    msg = f"🚨 *APP SINAL IA* 🚨\nAtivo: {ticker}\nPreço: R$ {preco_atual:.2f}\nQtd: {quantidade_lote}\nAlvo: R$ {preco_venda_alvo:.2f}"
-                    enviar_notificacao_telegram(tok, cid, msg)
+                else:
+                    veredicto = "⏳ FIQUE DE FORA"
+                    ordem_prioridade = 2
+                    quantidade_lote = 0
+                    stop_loss = 0.0
+                    preco_venda_alvo = 0.0
