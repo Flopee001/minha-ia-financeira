@@ -80,6 +80,7 @@ if aba_autenticacao == "Entrar no Sistema":
             st.session_state["login_confirmado"] = True
             st.session_state["usuario_ativo"] = user_input
             st.sidebar.success(f"🔓 Acesso liberado! Bem-vindo, {user_input}.")
+            st.rerun()
         else:
             st.sidebar.error("❌ Usuário ou senha incorretos.")
 
@@ -167,7 +168,8 @@ if login_confirmado:
         for ticker in lista_ativos:
             try:
                 dados = yf.download(ticker, start="2023-01-01", progress=False, multi_level_index=False, session=session)
-                if dados is None or dados.empty or len(dados) < 150: continue
+                if dados is None or dados.empty or len(dados) < 150: 
+                    continue
                 
                 if isinstance(dados.columns, pd.MultiIndex):
                     dados.columns = dados.columns.get_level_values(0)
@@ -204,7 +206,7 @@ if login_confirmado:
                 preco_venda_alvo = preco_atual * 1.09
 
                 perda_por_acao = preco_atual - stop_loss
-                quantidade_lote = int(risco_max / perda_por_acao)
+                quantidade_lote = int(risco_max / perda_por_acao) if perda_por_acao > 0 else 0
                 if (quantidade_lote * preco_atual) > cap:
                     quantidade_lote = int(cap // preco_atual)
 
@@ -219,4 +221,3 @@ if login_confirmado:
                     ordem_prioridade = 2
                     quantidade_lote = 0
                     stop_loss = 0.0
-                    preco_venda_alvo = 0.0
